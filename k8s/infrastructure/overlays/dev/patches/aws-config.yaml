@@ -1,0 +1,67 @@
+# EKS Cluster Claim - dev configuration
+apiVersion: infrastructure.stack.ai/v1alpha1
+kind: EKSCluster
+metadata:
+  name: main
+spec:
+  region: us-east-1
+  version: "1.29"
+  nodeInstanceType: t3.medium
+  nodeDesiredSize: 2
+  nodeMinSize: 1
+  nodeMaxSize: 3
+  nodeCapacityType: SPOT
+  # TODO: Replace with actual subnet IDs after VPC is created
+  subnetIds:
+    - subnet-dev-private-a
+    - subnet-dev-private-b
+    - subnet-dev-private-c
+  clusterRoleArn: arn:aws:iam::111111111111:role/dev-eks-cluster
+  nodeRoleArn: arn:aws:iam::111111111111:role/dev-eks-node
+---
+# AWS LB Controller Claim - references EKSCluster outputs
+# After EKSCluster is created, get values from:
+#   kubectl get ekscluster main -o jsonpath='{.status.oidcIssuer}'
+#   kubectl get ekscluster main -o jsonpath='{.status.oidcProviderArn}'
+apiVersion: infrastructure.stack.ai/v1alpha1
+kind: AWSLBController
+metadata:
+  name: main
+spec:
+  region: us-east-1
+  clusterName: dev-main
+  oidcProviderArn: arn:aws:iam::111111111111:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/DEV_OIDC_ID
+  oidcIssuer: oidc.eks.us-east-1.amazonaws.com/id/DEV_OIDC_ID
+  vpcId: vpc-dev
+---
+# Aurora Serverless Claim - dev configuration
+apiVersion: infrastructure.stack.ai/v1alpha1
+kind: AuroraCluster
+metadata:
+  name: supabase
+spec:
+  region: us-east-1
+  minCapacity: 0.5
+  maxCapacity: 2
+  dnsName: postgres-dev
+  # TODO: Replace with actual values after VPC is created
+  subnetIds:
+    - subnet-dev-private-a
+    - subnet-dev-private-b
+    - subnet-dev-private-c
+  vpcSecurityGroupIds:
+    - sg-dev-aurora
+  hostedZoneId: Z0123456789DEV
+---
+# VPC
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: VPC
+metadata:
+  name: main
+spec:
+  forProvider:
+    region: us-east-1
+    cidrBlock: 10.0.0.0/16
+    tags:
+      Name: dev-vpc
+      Environment: dev

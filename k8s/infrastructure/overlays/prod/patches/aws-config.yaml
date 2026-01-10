@@ -1,0 +1,64 @@
+# EKS Cluster Claim - prod configuration
+apiVersion: infrastructure.stack.ai/v1alpha1
+kind: EKSCluster
+metadata:
+  name: main
+spec:
+  region: us-east-1
+  version: "1.29"
+  nodeInstanceType: t3.large
+  nodeDesiredSize: 3
+  nodeMinSize: 2
+  nodeMaxSize: 10
+  nodeCapacityType: ON_DEMAND
+  # TODO: Replace with actual subnet IDs after VPC is created
+  subnetIds:
+    - subnet-prod-private-a
+    - subnet-prod-private-b
+    - subnet-prod-private-c
+  clusterRoleArn: arn:aws:iam::222222222222:role/prod-eks-cluster
+  nodeRoleArn: arn:aws:iam::222222222222:role/prod-eks-node
+---
+# AWS LB Controller Claim - references EKSCluster outputs
+apiVersion: infrastructure.stack.ai/v1alpha1
+kind: AWSLBController
+metadata:
+  name: main
+spec:
+  region: us-east-1
+  clusterName: prod-main
+  oidcProviderArn: arn:aws:iam::222222222222:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/PROD_OIDC_ID
+  oidcIssuer: oidc.eks.us-east-1.amazonaws.com/id/PROD_OIDC_ID
+  vpcId: vpc-prod
+---
+# Aurora Serverless Claim - prod configuration
+apiVersion: infrastructure.stack.ai/v1alpha1
+kind: AuroraCluster
+metadata:
+  name: supabase
+spec:
+  region: us-east-1
+  minCapacity: 2
+  maxCapacity: 16
+  dnsName: postgres-prod
+  # TODO: Replace with actual values after VPC is created
+  subnetIds:
+    - subnet-prod-private-a
+    - subnet-prod-private-b
+    - subnet-prod-private-c
+  vpcSecurityGroupIds:
+    - sg-prod-aurora
+  hostedZoneId: Z0123456789PROD
+---
+# VPC
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: VPC
+metadata:
+  name: main
+spec:
+  forProvider:
+    region: us-east-1
+    cidrBlock: 10.0.0.0/16
+    tags:
+      Name: prod-vpc
+      Environment: prod

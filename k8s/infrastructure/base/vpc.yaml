@@ -1,0 +1,175 @@
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: VPC
+metadata:
+  name: main
+  labels:
+    app.kubernetes.io/name: vpc
+    app.kubernetes.io/part-of: infrastructure
+spec:
+  forProvider:
+    region: us-east-1
+    cidrBlock: 10.0.0.0/16
+    enableDnsHostnames: true
+    enableDnsSupport: true
+    tags:
+      Name: main-vpc
+  providerConfigRef:
+    name: default
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: InternetGateway
+metadata:
+  name: main
+  labels:
+    app.kubernetes.io/name: igw
+    app.kubernetes.io/part-of: infrastructure
+spec:
+  forProvider:
+    region: us-east-1
+    vpcIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: vpc
+    tags:
+      Name: main-igw
+  providerConfigRef:
+    name: default
+---
+# Public Subnets (for ALB, NAT Gateway)
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: Subnet
+metadata:
+  name: public-a
+  labels:
+    app.kubernetes.io/name: subnet-public
+    app.kubernetes.io/part-of: infrastructure
+    zone: a
+spec:
+  forProvider:
+    region: us-east-1
+    availabilityZone: us-east-1a
+    vpcIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: vpc
+    cidrBlock: 10.0.0.0/20
+    mapPublicIpOnLaunch: true
+    tags:
+      Name: public-a
+      kubernetes.io/role/elb: "1"
+  providerConfigRef:
+    name: default
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: Subnet
+metadata:
+  name: public-b
+  labels:
+    app.kubernetes.io/name: subnet-public
+    app.kubernetes.io/part-of: infrastructure
+    zone: b
+spec:
+  forProvider:
+    region: us-east-1
+    availabilityZone: us-east-1b
+    vpcIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: vpc
+    cidrBlock: 10.0.16.0/20
+    mapPublicIpOnLaunch: true
+    tags:
+      Name: public-b
+      kubernetes.io/role/elb: "1"
+  providerConfigRef:
+    name: default
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: Subnet
+metadata:
+  name: public-c
+  labels:
+    app.kubernetes.io/name: subnet-public
+    app.kubernetes.io/part-of: infrastructure
+    zone: c
+spec:
+  forProvider:
+    region: us-east-1
+    availabilityZone: us-east-1c
+    vpcIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: vpc
+    cidrBlock: 10.0.32.0/20
+    mapPublicIpOnLaunch: true
+    tags:
+      Name: public-c
+      kubernetes.io/role/elb: "1"
+  providerConfigRef:
+    name: default
+---
+# Private Subnets (for EKS nodes)
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: Subnet
+metadata:
+  name: private-a
+  labels:
+    app.kubernetes.io/name: subnet-private
+    app.kubernetes.io/part-of: infrastructure
+    zone: a
+spec:
+  forProvider:
+    region: us-east-1
+    availabilityZone: us-east-1a
+    vpcIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: vpc
+    cidrBlock: 10.0.128.0/20
+    mapPublicIpOnLaunch: false
+    tags:
+      Name: private-a
+      kubernetes.io/role/internal-elb: "1"
+  providerConfigRef:
+    name: default
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: Subnet
+metadata:
+  name: private-b
+  labels:
+    app.kubernetes.io/name: subnet-private
+    app.kubernetes.io/part-of: infrastructure
+    zone: b
+spec:
+  forProvider:
+    region: us-east-1
+    availabilityZone: us-east-1b
+    vpcIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: vpc
+    cidrBlock: 10.0.144.0/20
+    mapPublicIpOnLaunch: false
+    tags:
+      Name: private-b
+      kubernetes.io/role/internal-elb: "1"
+  providerConfigRef:
+    name: default
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: Subnet
+metadata:
+  name: private-c
+  labels:
+    app.kubernetes.io/name: subnet-private
+    app.kubernetes.io/part-of: infrastructure
+    zone: c
+spec:
+  forProvider:
+    region: us-east-1
+    availabilityZone: us-east-1c
+    vpcIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: vpc
+    cidrBlock: 10.0.160.0/20
+    mapPublicIpOnLaunch: false
+    tags:
+      Name: private-c
+      kubernetes.io/role/internal-elb: "1"
+  providerConfigRef:
+    name: default

@@ -1,0 +1,17 @@
+# PostgreSQL ExternalName Service
+# Points to Aurora Serverless via Route53 private hosted zone
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: supabase
+spec:
+  type: ExternalName
+  externalName: postgres.supabase.internal
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres

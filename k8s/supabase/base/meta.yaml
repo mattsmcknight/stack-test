@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: meta
+  labels:
+    app.kubernetes.io/name: meta
+    app.kubernetes.io/component: meta
+    app.kubernetes.io/part-of: supabase
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+  selector:
+    app.kubernetes.io/name: meta
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: meta
+  labels:
+    app.kubernetes.io/name: meta
+    app.kubernetes.io/component: meta
+    app.kubernetes.io/part-of: supabase
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: meta
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: meta
+        app.kubernetes.io/component: meta
+        app.kubernetes.io/part-of: supabase
+    spec:
+      containers:
+        - name: meta
+          image: supabase/postgres-meta:v0.84.2
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PG_META_PORT
+              value: "8080"
+            - name: PG_META_DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: supabase-config
+                  key: POSTGRES_HOST
+            - name: PG_META_DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: supabase-config
+                  key: POSTGRES_PORT
+            - name: PG_META_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: supabase-config
+                  key: POSTGRES_DB
+            - name: PG_META_DB_USER
+              value: "supabase_admin"
+            - name: PG_META_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-db
+                  key: postgres-password
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "25m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5

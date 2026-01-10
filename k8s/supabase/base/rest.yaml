@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: rest
+  labels:
+    app.kubernetes.io/name: rest
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: supabase
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3000
+      targetPort: 3000
+      name: http
+  selector:
+    app.kubernetes.io/name: rest
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rest
+  labels:
+    app.kubernetes.io/name: rest
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: supabase
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rest
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: rest
+        app.kubernetes.io/component: api
+        app.kubernetes.io/part-of: supabase
+    spec:
+      containers:
+        - name: postgrest
+          image: postgrest/postgrest:v12.2.3
+          ports:
+            - containerPort: 3000
+          env:
+            - name: PGRST_DB_URI
+              value: "postgres://authenticator:$(POSTGRES_PASSWORD)@postgres:5432/postgres"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-db
+                  key: postgres-password
+            - name: PGRST_DB_SCHEMAS
+              valueFrom:
+                configMapKeyRef:
+                  name: supabase-config
+                  key: PGRST_DB_SCHEMA
+            - name: PGRST_DB_ANON_ROLE
+              valueFrom:
+                configMapKeyRef:
+                  name: supabase-config
+                  key: PGRST_DB_ANON_ROLE
+            - name: PGRST_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-db
+                  key: jwt-secret
+            - name: PGRST_DB_USE_LEGACY_GUCS
+              valueFrom:
+                configMapKeyRef:
+                  name: supabase-config
+                  key: PGRST_DB_USE_LEGACY_GUCS
+            - name: PGRST_APP_SETTINGS_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-db
+                  key: jwt-secret
+            - name: PGRST_APP_SETTINGS_JWT_EXP
+              value: "3600"
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "25m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5

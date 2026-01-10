@@ -1,0 +1,155 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth
+  labels:
+    app.kubernetes.io/name: auth
+    app.kubernetes.io/component: authentication
+    app.kubernetes.io/part-of: supabase
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9999
+      targetPort: 9999
+      name: http
+  selector:
+    app.kubernetes.io/name: auth
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth
+  labels:
+    app.kubernetes.io/name: auth
+    app.kubernetes.io/component: authentication
+    app.kubernetes.io/part-of: supabase
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: auth
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: auth
+        app.kubernetes.io/component: authentication
+        app.kubernetes.io/part-of: supabase
+    spec:
+      containers:
+        - name: gotrue
+          image: supabase/gotrue:v2.158.1
+          ports:
+            - containerPort: 9999
+          env:
+            - name: GOTRUE_API_HOST
+              value: "0.0.0.0"
+            - name: GOTRUE_API_PORT
+              value: "9999"
+            - name: API_EXTERNAL_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: supabase-config
+                  key: SUPABASE_PUBLIC_URL
+            - name: GOTRUE_DB_DRIVER
+              value: "postgres"
+            - name: GOTRUE_DB_DATABASE_URL
+              value: "postgres://supabase_auth_admin:$(POSTGRES_PASSWORD)@postgres:5432/postgres"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-db
+                  key: postgres-password
+            - name: GOTRUE_SITE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: supabase-config
+                  key: GOTRUE_SITE_URL
+            - name: GOTRUE_URI_ALLOW_LIST
+              valueFrom:
+                configMapKeyRef:
+                  name: supabase-config
+                  key: GOTRUE_URI_ALLOW_LIST
+            - name: GOTRUE_DISABLE_SIGNUP
+              valueFrom:
+                configMapKeyRef:
+                  name: supabase-config
+                  key: GOTRUE_DISABLE_SIGNUP
+            - name: GOTRUE_JWT_EXPIRY
+              valueFrom:
+                configMapKeyRef:
+                  name: supabase-config
+                  key: GOTRUE_JWT_EXPIRY
+            - name: GOTRUE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-db
+                  key: jwt-secret
+            - name: GOTRUE_JWT_DEFAULT_GROUP_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: supabase-config
+                  key: GOTRUE_JWT_DEFAULT_GROUP_NAME
+            - name: GOTRUE_EXTERNAL_EMAIL_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: supabase-config
+                  key: GOTRUE_EXTERNAL_EMAIL_ENABLED
+            - name: GOTRUE_MAILER_AUTOCONFIRM
+              valueFrom:
+                configMapKeyRef:
+                  name: supabase-config
+                  key: GOTRUE_MAILER_AUTOCONFIRM
+            - name: GOTRUE_SMTP_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-smtp
+                  key: smtp-host
+            - name: GOTRUE_SMTP_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-smtp
+                  key: smtp-port
+            - name: GOTRUE_SMTP_USER
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-smtp
+                  key: smtp-user
+            - name: GOTRUE_SMTP_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-smtp
+                  key: smtp-pass
+            - name: GOTRUE_SMTP_SENDER_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-smtp
+                  key: smtp-sender
+            - name: GOTRUE_EXTERNAL_PHONE_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: supabase-config
+                  key: GOTRUE_EXTERNAL_PHONE_ENABLED
+            - name: GOTRUE_SMS_AUTOCONFIRM
+              valueFrom:
+                configMapKeyRef:
+                  name: supabase-config
+                  key: GOTRUE_SMS_AUTOCONFIRM
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "25m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9999
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 9999
+            initialDelaySeconds: 5
+            periodSeconds: 5

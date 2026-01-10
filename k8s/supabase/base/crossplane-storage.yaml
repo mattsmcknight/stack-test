@@ -1,0 +1,136 @@
+apiVersion: s3.aws.upbound.io/v1beta1
+kind: Bucket
+metadata:
+  name: supabase-storage
+  labels:
+    app.kubernetes.io/name: storage
+    app.kubernetes.io/part-of: supabase
+spec:
+  forProvider:
+    region: us-east-1
+  providerConfigRef:
+    name: default
+---
+apiVersion: s3.aws.upbound.io/v1beta1
+kind: BucketVersioning
+metadata:
+  name: supabase-storage-versioning
+spec:
+  forProvider:
+    bucketSelector:
+      matchLabels:
+        app.kubernetes.io/name: storage
+    versioningConfiguration:
+      - status: Enabled
+    region: us-east-1
+  providerConfigRef:
+    name: default
+---
+apiVersion: s3.aws.upbound.io/v1beta1
+kind: BucketServerSideEncryptionConfiguration
+metadata:
+  name: supabase-storage-encryption
+spec:
+  forProvider:
+    bucketSelector:
+      matchLabels:
+        app.kubernetes.io/name: storage
+    rule:
+      - applyServerSideEncryptionByDefault:
+          - sseAlgorithm: AES256
+    region: us-east-1
+  providerConfigRef:
+    name: default
+---
+apiVersion: s3.aws.upbound.io/v1beta1
+kind: BucketPublicAccessBlock
+metadata:
+  name: supabase-storage-public-access
+spec:
+  forProvider:
+    bucketSelector:
+      matchLabels:
+        app.kubernetes.io/name: storage
+    blockPublicAcls: true
+    blockPublicPolicy: true
+    ignorePublicAcls: true
+    restrictPublicBuckets: true
+    region: us-east-1
+  providerConfigRef:
+    name: default
+---
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: Role
+metadata:
+  name: supabase-storage-role
+  labels:
+    app.kubernetes.io/name: storage
+    app.kubernetes.io/part-of: supabase
+spec:
+  forProvider:
+    assumeRolePolicy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "Federated": "arn:aws:iam::ACCOUNT_ID:oidc-provider/oidc.eks.REGION.amazonaws.com/id/OIDC_ID"
+            },
+            "Action": "sts:AssumeRoleWithWebIdentity",
+            "Condition": {
+              "StringEquals": {
+                "oidc.eks.REGION.amazonaws.com/id/OIDC_ID:sub": "system:serviceaccount:supabase:supabase-storage",
+                "oidc.eks.REGION.amazonaws.com/id/OIDC_ID:aud": "sts.amazonaws.com"
+              }
+            }
+          }
+        ]
+      }
+  providerConfigRef:
+    name: default
+---
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: Policy
+metadata:
+  name: supabase-storage-s3-policy
+  labels:
+    app.kubernetes.io/name: storage
+    app.kubernetes.io/part-of: supabase
+spec:
+  forProvider:
+    policy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "ListBucket",
+            "Effect": "Allow",
+            "Action": ["s3:ListBucket", "s3:GetBucketLocation"],
+            "Resource": "arn:aws:s3:::supabase-storage"
+          },
+          {
+            "Sid": "ObjectAccess",
+            "Effect": "Allow",
+            "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+            "Resource": "arn:aws:s3:::supabase-storage/*"
+          }
+        ]
+      }
+  providerConfigRef:
+    name: default
+---
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: RolePolicyAttachment
+metadata:
+  name: supabase-storage-policy-attachment
+spec:
+  forProvider:
+    policyArnSelector:
+      matchLabels:
+        app.kubernetes.io/name: storage
+    roleSelector:
+      matchLabels:
+        app.kubernetes.io/name: storage
+  providerConfigRef:
+    name: default

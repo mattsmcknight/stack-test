@@ -1,0 +1,205 @@
+# Composite Resource Definition - defines the API for our EKS + OIDC bundle
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xeksclusters.infrastructure.stack.ai
+spec:
+  group: infrastructure.stack.ai
+  names:
+    kind: XEKSCluster
+    plural: xeksclusters
+  claimNames:
+    kind: EKSCluster
+    plural: eksclusters
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                region:
+                  type: string
+                  default: us-east-1
+                version:
+                  type: string
+                  default: "1.29"
+                nodeInstanceType:
+                  type: string
+                  default: t3.medium
+                nodeDesiredSize:
+                  type: integer
+                  default: 2
+                nodeMinSize:
+                  type: integer
+                  default: 1
+                nodeMaxSize:
+                  type: integer
+                  default: 4
+                nodeCapacityType:
+                  type: string
+                  default: ON_DEMAND
+                  enum: [ON_DEMAND, SPOT]
+                subnetIds:
+                  type: array
+                  items:
+                    type: string
+                clusterRoleArn:
+                  type: string
+                nodeRoleArn:
+                  type: string
+              required:
+                - subnetIds
+                - clusterRoleArn
+                - nodeRoleArn
+            status:
+              type: object
+              properties:
+                oidcIssuer:
+                  type: string
+                oidcProviderArn:
+                  type: string
+                clusterEndpoint:
+                  type: string
+                clusterName:
+                  type: string
+---
+# Composition - wires EKS Cluster to OIDC Provider
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: eks-with-oidc
+  labels:
+    provider: aws
+spec:
+  compositeTypeRef:
+    apiVersion: infrastructure.stack.ai/v1alpha1
+    kind: XEKSCluster
+
+  writeConnectionSecretsToNamespace: crossplane-system
+
+  resources:
+    # EKS Cluster
+    - name: eks-cluster
+      base:
+        apiVersion: eks.aws.upbound.io/v1beta1
+        kind: Cluster
+        spec:
+          forProvider:
+            vpcConfig:
+              - endpointPrivateAccess: true
+                endpointPublicAccess: true
+            enabledClusterLogTypes:
+              - api
+              - audit
+              - authenticator
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.version
+          toFieldPath: spec.forProvider.version
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.subnetIds
+          toFieldPath: spec.forProvider.vpcConfig[0].subnetIds
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.clusterRoleArn
+          toFieldPath: spec.forProvider.roleArn
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: metadata.name
+        # Export OIDC issuer to status
+        - type: ToCompositeFieldPath
+          fromFieldPath: status.atProvider.identity[0].oidc[0].issuer
+          toFieldPath: status.oidcIssuer
+        - type: ToCompositeFieldPath
+          fromFieldPath: status.atProvider.endpoint
+          toFieldPath: status.clusterEndpoint
+        - type: ToCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: status.clusterName
+
+    # OIDC Provider - automatically gets URL from cluster
+    - name: oidc-provider
+      base:
+        apiVersion: iam.aws.upbound.io/v1beta1
+        kind: OpenIDConnectProvider
+        spec:
+          forProvider:
+            clientIdList:
+              - sts.amazonaws.com
+            thumbprintList:
+              - "9e99a48a9960b14926bb7f3b02e22da2b0ab7280"
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: status.oidcIssuer
+          toFieldPath: spec.forProvider.url
+          policy:
+            fromFieldPath: Required
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "%s-oidc"
+          toFieldPath: metadata.name
+        - type: ToCompositeFieldPath
+          fromFieldPath: status.atProvider.arn
+          toFieldPath: status.oidcProviderArn
+
+    # Node Group
+    - name: eks-nodegroup
+      base:
+        apiVersion: eks.aws.upbound.io/v1beta1
+        kind: NodeGroup
+        spec:
+          forProvider:
+            amiType: AL2_x86_64
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.clusterName
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.subnetIds
+          toFieldPath: spec.forProvider.subnetIds
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.nodeRoleArn
+          toFieldPath: spec.forProvider.nodeRoleArn
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.nodeInstanceType
+          toFieldPath: spec.forProvider.instanceTypes[0]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.nodeCapacityType
+          toFieldPath: spec.forProvider.capacityType
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.nodeDesiredSize
+          toFieldPath: spec.forProvider.scalingConfig[0].desiredSize
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.nodeMinSize
+          toFieldPath: spec.forProvider.scalingConfig[0].minSize
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.nodeMaxSize
+          toFieldPath: spec.forProvider.scalingConfig[0].maxSize
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "%s-nodes"
+          toFieldPath: metadata.name

@@ -1,0 +1,49 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CrossplanePermissions",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:*",
+        "eks:*",
+        "rds:*",
+        "s3:*",
+        "iam:*",
+        "route53:*",
+        "elasticloadbalancing:*",
+        "autoscaling:*",
+        "cloudwatch:*",
+        "logs:*",
+        "kms:*",
+        "secretsmanager:*",
+        "ssm:GetParameter*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DenyBoundaryPolicyEdit",
+      "Effect": "Deny",
+      "Action": [
+        "iam:DeletePolicy",
+        "iam:CreatePolicyVersion",
+        "iam:DeletePolicyVersion",
+        "iam:SetDefaultPolicyVersion"
+      ],
+      "Resource": "arn:aws:iam::ACCOUNT_ID:policy/crossplaneBoundary"
+    },
+    {
+      "Sid": "DenyBoundaryDelete",
+      "Effect": "Deny",
+      "Action": [
+        "iam:DeleteRolePermissionsBoundary"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "iam:PermissionsBoundary": "arn:aws:iam::ACCOUNT_ID:policy/crossplaneBoundary"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+# ArgoCD Project for stack-ai
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: stack-ai
+  namespace: argocd
+spec:
+  description: "Stack AI platform components"
+
+  # Allow deploying from this repo
+  sourceRepos:
+    - "https://github.com/mattsmcknight/stack-test.git"
+    - "https://aws.github.io/eks-charts"
+    - "https://charts.crossplane.io/stable"
+
+  # Allow deploying to these namespaces
+  destinations:
+    - namespace: "*"
+      server: https://kubernetes.default.svc
+
+  # Allow creating these cluster-scoped resources
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+
+  # Namespace-scoped resources
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+
+  # Sync windows (optional - restrict when syncs can happen)
+  # syncWindows:
+  #   - kind: allow
+  #     schedule: "0 * * * *"
+  #     duration: 1h

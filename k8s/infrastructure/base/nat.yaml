@@ -1,0 +1,40 @@
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: EIP
+metadata:
+  name: nat-a
+  labels:
+    app.kubernetes.io/name: eip-nat
+    app.kubernetes.io/part-of: infrastructure
+    zone: a
+spec:
+  forProvider:
+    region: us-east-1
+    domain: vpc
+    tags:
+      Name: nat-eip-a
+  providerConfigRef:
+    name: default
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: NATGateway
+metadata:
+  name: nat-a
+  labels:
+    app.kubernetes.io/name: nat
+    app.kubernetes.io/part-of: infrastructure
+    zone: a
+spec:
+  forProvider:
+    region: us-east-1
+    allocationIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: eip-nat
+        zone: a
+    subnetIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: subnet-public
+        zone: a
+    tags:
+      Name: nat-a
+  providerConfigRef:
+    name: default

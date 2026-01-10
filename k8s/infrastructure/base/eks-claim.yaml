@@ -1,0 +1,20 @@
+# EKS Cluster Claim - uses the Composition to create EKS + OIDC together
+apiVersion: infrastructure.stack.ai/v1alpha1
+kind: EKSCluster
+metadata:
+  name: main
+  labels:
+    app.kubernetes.io/name: eks-cluster
+    app.kubernetes.io/part-of: infrastructure
+spec:
+  region: us-east-1
+  version: "1.29"
+  nodeInstanceType: t3.medium
+  nodeDesiredSize: 2
+  nodeMinSize: 1
+  nodeMaxSize: 4
+  nodeCapacityType: ON_DEMAND
+  # These will be populated via Kustomize patches referencing the IAM roles
+  subnetIds: []      # Patch with private subnet IDs
+  clusterRoleArn: "" # Patch with eks-cluster role ARN
+  nodeRoleArn: ""    # Patch with eks-node role ARN

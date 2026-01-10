@@ -1,0 +1,17 @@
+# AWS Load Balancer Controller Claim
+# References EKSCluster status for OIDC values
+apiVersion: infrastructure.stack.ai/v1alpha1
+kind: AWSLBController
+metadata:
+  name: main
+  labels:
+    app.kubernetes.io/name: aws-load-balancer-controller
+    app.kubernetes.io/part-of: infrastructure
+spec:
+  region: us-east-1
+  clusterName: main
+  chartVersion: "1.7.1"
+  # These are populated from EKSCluster status via overlay patches
+  oidcProviderArn: ""
+  oidcIssuer: ""
+  vpcId: ""

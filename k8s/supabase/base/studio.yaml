@@ -1,0 +1,112 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: studio
+  labels:
+    app.kubernetes.io/name: studio
+    app.kubernetes.io/component: dashboard
+    app.kubernetes.io/part-of: supabase
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3000
+      targetPort: 3000
+      name: http
+  selector:
+    app.kubernetes.io/name: studio
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: studio
+  labels:
+    app.kubernetes.io/name: studio
+    app.kubernetes.io/component: dashboard
+    app.kubernetes.io/part-of: supabase
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: studio
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: studio
+        app.kubernetes.io/component: dashboard
+        app.kubernetes.io/part-of: supabase
+    spec:
+      containers:
+        - name: studio
+          image: supabase/studio:20240729-ce42139
+          ports:
+            - containerPort: 3000
+          env:
+            - name: STUDIO_PG_META_URL
+              value: "http://meta:8080"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-db
+                  key: postgres-password
+            - name: DEFAULT_ORGANIZATION_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: supabase-config
+                  key: STUDIO_DEFAULT_ORGANIZATION
+            - name: DEFAULT_PROJECT_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: supabase-config
+                  key: STUDIO_DEFAULT_PROJECT
+            - name: SUPABASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: supabase-config
+                  key: SUPABASE_PUBLIC_URL
+            - name: SUPABASE_PUBLIC_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: supabase-config
+                  key: SUPABASE_PUBLIC_URL
+            - name: SUPABASE_ANON_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-db
+                  key: anon-key
+            - name: SUPABASE_SERVICE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-db
+                  key: service-role-key
+            - name: AUTH_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-db
+                  key: jwt-secret
+            - name: LOGFLARE_API_KEY
+              value: ""
+            - name: LOGFLARE_URL
+              value: ""
+            - name: NEXT_PUBLIC_ENABLE_LOGS
+              value: "false"
+            - name: NEXT_ANALYTICS_BACKEND_PROVIDER
+              value: "postgres"
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "25m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+          livenessProbe:
+            httpGet:
+              path: /api/profile
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/profile
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5

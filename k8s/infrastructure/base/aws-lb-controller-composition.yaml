@@ -1,0 +1,358 @@
+# Composite Resource Definition for AWS LB Controller IRSA
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xawslbcontrollers.infrastructure.stack.ai
+spec:
+  group: infrastructure.stack.ai
+  names:
+    kind: XAWSLBController
+    plural: xawslbcontrollers
+  claimNames:
+    kind: AWSLBController
+    plural: awslbcontrollers
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                region:
+                  type: string
+                  default: us-east-1
+                clusterName:
+                  type: string
+                oidcProviderArn:
+                  type: string
+                  description: "ARN of the OIDC provider (from EKSCluster status)"
+                oidcIssuer:
+                  type: string
+                  description: "OIDC issuer URL (from EKSCluster status)"
+                vpcId:
+                  type: string
+                chartVersion:
+                  type: string
+                  default: "1.7.1"
+              required:
+                - clusterName
+                - oidcProviderArn
+                - oidcIssuer
+            status:
+              type: object
+              properties:
+                roleArn:
+                  type: string
+---
+# Composition for AWS LB Controller
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: aws-lb-controller
+  labels:
+    provider: aws
+spec:
+  compositeTypeRef:
+    apiVersion: infrastructure.stack.ai/v1alpha1
+    kind: XAWSLBController
+
+  resources:
+    # IAM Policy
+    - name: iam-policy
+      base:
+        apiVersion: iam.aws.upbound.io/v1beta1
+        kind: Policy
+        spec:
+          forProvider:
+            name: AWSLoadBalancerControllerIAMPolicy
+            policy: |
+              {
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Effect": "Allow",
+                    "Action": ["iam:CreateServiceLinkedRole"],
+                    "Resource": "*",
+                    "Condition": {
+                      "StringEquals": {
+                        "iam:AWSServiceName": "elasticloadbalancing.amazonaws.com"
+                      }
+                    }
+                  },
+                  {
+                    "Effect": "Allow",
+                    "Action": [
+                      "ec2:DescribeAccountAttributes",
+                      "ec2:DescribeAddresses",
+                      "ec2:DescribeAvailabilityZones",
+                      "ec2:DescribeInternetGateways",
+                      "ec2:DescribeVpcs",
+                      "ec2:DescribeVpcPeeringConnections",
+                      "ec2:DescribeSubnets",
+                      "ec2:DescribeSecurityGroups",
+                      "ec2:DescribeInstances",
+                      "ec2:DescribeNetworkInterfaces",
+                      "ec2:DescribeTags",
+                      "ec2:GetCoipPoolUsage",
+                      "ec2:DescribeCoipPools",
+                      "elasticloadbalancing:DescribeLoadBalancers",
+                      "elasticloadbalancing:DescribeLoadBalancerAttributes",
+                      "elasticloadbalancing:DescribeListeners",
+                      "elasticloadbalancing:DescribeListenerCertificates",
+                      "elasticloadbalancing:DescribeSSLPolicies",
+                      "elasticloadbalancing:DescribeRules",
+                      "elasticloadbalancing:DescribeTargetGroups",
+                      "elasticloadbalancing:DescribeTargetGroupAttributes",
+                      "elasticloadbalancing:DescribeTargetHealth",
+                      "elasticloadbalancing:DescribeTags",
+                      "elasticloadbalancing:DescribeTrustStores"
+                    ],
+                    "Resource": "*"
+                  },
+                  {
+                    "Effect": "Allow",
+                    "Action": [
+                      "cognito-idp:DescribeUserPoolClient",
+                      "acm:ListCertificates",
+                      "acm:DescribeCertificate",
+                      "iam:ListServerCertificates",
+                      "iam:GetServerCertificate",
+                      "waf-regional:GetWebACL",
+                      "waf-regional:GetWebACLForResource",
+                      "waf-regional:AssociateWebACL",
+                      "waf-regional:DisassociateWebACL",
+                      "wafv2:GetWebACL",
+                      "wafv2:GetWebACLForResource",
+                      "wafv2:AssociateWebACL",
+                      "wafv2:DisassociateWebACL",
+                      "shield:GetSubscriptionState",
+                      "shield:DescribeProtection",
+                      "shield:CreateProtection",
+                      "shield:DeleteProtection"
+                    ],
+                    "Resource": "*"
+                  },
+                  {
+                    "Effect": "Allow",
+                    "Action": [
+                      "ec2:AuthorizeSecurityGroupIngress",
+                      "ec2:RevokeSecurityGroupIngress",
+                      "ec2:CreateSecurityGroup",
+                      "ec2:CreateTags",
+                      "ec2:DeleteTags",
+                      "ec2:DeleteSecurityGroup"
+                    ],
+                    "Resource": "*"
+                  },
+                  {
+                    "Effect": "Allow",
+                    "Action": [
+                      "elasticloadbalancing:CreateLoadBalancer",
+                      "elasticloadbalancing:CreateTargetGroup",
+                      "elasticloadbalancing:CreateListener",
+                      "elasticloadbalancing:DeleteListener",
+                      "elasticloadbalancing:CreateRule",
+                      "elasticloadbalancing:DeleteRule",
+                      "elasticloadbalancing:AddTags",
+                      "elasticloadbalancing:RemoveTags",
+                      "elasticloadbalancing:ModifyLoadBalancerAttributes",
+                      "elasticloadbalancing:SetIpAddressType",
+                      "elasticloadbalancing:SetSecurityGroups",
+                      "elasticloadbalancing:SetSubnets",
+                      "elasticloadbalancing:DeleteLoadBalancer",
+                      "elasticloadbalancing:ModifyTargetGroup",
+                      "elasticloadbalancing:ModifyTargetGroupAttributes",
+                      "elasticloadbalancing:DeleteTargetGroup",
+                      "elasticloadbalancing:RegisterTargets",
+                      "elasticloadbalancing:DeregisterTargets",
+                      "elasticloadbalancing:SetWebAcl",
+                      "elasticloadbalancing:ModifyListener",
+                      "elasticloadbalancing:AddListenerCertificates",
+                      "elasticloadbalancing:RemoveListenerCertificates",
+                      "elasticloadbalancing:ModifyRule"
+                    ],
+                    "Resource": "*"
+                  }
+                ]
+              }
+          providerConfigRef:
+            name: default
+      patches:
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-aws-lb-controller-policy"
+          toFieldPath: metadata.name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-AWSLoadBalancerControllerIAMPolicy"
+          toFieldPath: spec.forProvider.name
+
+    # IAM Role with OIDC trust
+    - name: iam-role
+      base:
+        apiVersion: iam.aws.upbound.io/v1beta1
+        kind: Role
+        spec:
+          providerConfigRef:
+            name: default
+      patches:
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-aws-lb-controller-role"
+          toFieldPath: metadata.name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.oidcProviderArn
+              - fromFieldPath: spec.oidcIssuer
+              - fromFieldPath: spec.oidcIssuer
+              - fromFieldPath: spec.oidcIssuer
+            strategy: string
+            string:
+              fmt: |
+                {
+                  "Version": "2012-10-17",
+                  "Statement": [
+                    {
+                      "Effect": "Allow",
+                      "Principal": {
+                        "Federated": "%s"
+                      },
+                      "Action": "sts:AssumeRoleWithWebIdentity",
+                      "Condition": {
+                        "StringEquals": {
+                          "%s:sub": "system:serviceaccount:kube-system:aws-load-balancer-controller",
+                          "%s:aud": "sts.amazonaws.com"
+                        }
+                      }
+                    }
+                  ]
+                }
+          toFieldPath: spec.forProvider.assumeRolePolicy
+          transforms:
+            - type: string
+              string:
+                type: TrimPrefix
+                trim: "https://"
+        - type: ToCompositeFieldPath
+          fromFieldPath: status.atProvider.arn
+          toFieldPath: status.roleArn
+
+    # Role Policy Attachment
+    - name: role-policy-attachment
+      base:
+        apiVersion: iam.aws.upbound.io/v1beta1
+        kind: RolePolicyAttachment
+        spec:
+          providerConfigRef:
+            name: default
+      patches:
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-aws-lb-controller-attachment"
+          toFieldPath: metadata.name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-aws-lb-controller-role"
+          toFieldPath: spec.forProvider.roleSelector.matchLabels[crossplane.io/claim-name]
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-aws-lb-controller-policy"
+          toFieldPath: spec.forProvider.policyArnSelector.matchLabels[crossplane.io/claim-name]
+
+    # ServiceAccount
+    - name: service-account
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha1
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: v1
+              kind: ServiceAccount
+              metadata:
+                name: aws-load-balancer-controller
+                namespace: kube-system
+          providerConfigRef:
+            name: default
+      patches:
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-aws-lb-controller-sa"
+          toFieldPath: metadata.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: status.roleArn
+          toFieldPath: spec.forProvider.manifest.metadata.annotations[eks.amazonaws.com/role-arn]
+          policy:
+            fromFieldPath: Required
+
+    # Helm Release
+    - name: helm-release
+      base:
+        apiVersion: helm.crossplane.io/v1beta1
+        kind: Release
+        spec:
+          forProvider:
+            chart:
+              name: aws-load-balancer-controller
+              repository: https://aws.github.io/eks-charts
+            namespace: kube-system
+            values:
+              serviceAccount:
+                create: false
+                name: aws-load-balancer-controller
+          providerConfigRef:
+            name: default
+      patches:
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-aws-lb-controller"
+          toFieldPath: metadata.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.chartVersion
+          toFieldPath: spec.forProvider.chart.version
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.clusterName
+          toFieldPath: spec.forProvider.values.clusterName
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.values.region
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.vpcId
+          toFieldPath: spec.forProvider.values.vpcId

@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: supabase
+
+resources:
+  - namespace.yaml
+  - secrets.yaml
+  - configmap.yaml
+  - postgres.yaml
+  - kong.yaml
+  - auth.yaml
+  - rest.yaml
+  - realtime.yaml
+  - storage-serviceaccount.yaml
+  - storage.yaml
+  - crossplane-storage.yaml
+  - meta.yaml
+  - studio.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: supabase

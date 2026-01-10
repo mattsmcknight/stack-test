@@ -1,0 +1,7 @@
+# Patch postgres service to point to dev Aurora DNS
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  externalName: postgres-dev.supabase.internal

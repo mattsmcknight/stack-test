@@ -1,0 +1,116 @@
+# IAM Role for EKS Cluster
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: Role
+metadata:
+  name: eks-cluster
+  labels:
+    app.kubernetes.io/name: eks-cluster-role
+    app.kubernetes.io/part-of: infrastructure
+spec:
+  forProvider:
+    assumeRolePolicy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": "eks.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      }
+  providerConfigRef:
+    name: default
+---
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: RolePolicyAttachment
+metadata:
+  name: eks-cluster-policy
+spec:
+  forProvider:
+    policyArn: arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+    roleSelector:
+      matchLabels:
+        app.kubernetes.io/name: eks-cluster-role
+  providerConfigRef:
+    name: default
+---
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: RolePolicyAttachment
+metadata:
+  name: eks-vpc-resource-controller
+spec:
+  forProvider:
+    policyArn: arn:aws:iam::aws:policy/AmazonEKSVPCResourceController
+    roleSelector:
+      matchLabels:
+        app.kubernetes.io/name: eks-cluster-role
+  providerConfigRef:
+    name: default
+---
+# IAM Role for EKS Node Group
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: Role
+metadata:
+  name: eks-node
+  labels:
+    app.kubernetes.io/name: eks-node-role
+    app.kubernetes.io/part-of: infrastructure
+spec:
+  forProvider:
+    assumeRolePolicy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": "ec2.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      }
+  providerConfigRef:
+    name: default
+---
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: RolePolicyAttachment
+metadata:
+  name: eks-node-policy
+spec:
+  forProvider:
+    policyArn: arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+    roleSelector:
+      matchLabels:
+        app.kubernetes.io/name: eks-node-role
+  providerConfigRef:
+    name: default
+---
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: RolePolicyAttachment
+metadata:
+  name: eks-cni-policy
+spec:
+  forProvider:
+    policyArn: arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+    roleSelector:
+      matchLabels:
+        app.kubernetes.io/name: eks-node-role
+  providerConfigRef:
+    name: default
+---
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: RolePolicyAttachment
+metadata:
+  name: eks-ecr-policy
+spec:
+  forProvider:
+    policyArn: arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+    roleSelector:
+      matchLabels:
+        app.kubernetes.io/name: eks-node-role
+  providerConfigRef:
+    name: default

@@ -1,0 +1,166 @@
+# Crossplane ApplicationSet (installs Crossplane itself)
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: crossplane
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - env: dev
+          - env: prod
+  template:
+    metadata:
+      name: "crossplane-{{env}}"
+      annotations:
+        argocd.argoproj.io/sync-wave: "-3"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: stack-ai
+      source:
+        repoURL: https://github.com/mattsmcknight/stack-test.git
+        targetRevision: HEAD
+        path: k8s/crossplane/base
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: crossplane-system
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+---
+# Infrastructure ApplicationSet
+# Note: autoSync is false initially for dev - bootstrap.sh enables it after first sync
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: infrastructure
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - env: dev
+            autoSync: "false"
+          - env: prod
+            autoSync: "false"
+  template:
+    metadata:
+      name: "infrastructure-{{env}}"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: stack-ai
+      source:
+        repoURL: https://github.com/mattsmcknight/stack-test.git
+        targetRevision: HEAD
+        path: "k8s/infrastructure/overlays/{{env}}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: crossplane-system
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
+  templatePatch: |
+    {{- if eq .autoSync "true" }}
+    spec:
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+    {{- end }}
+---
+# Supabase ApplicationSet
+# Note: autoSync is false initially - bootstrap.sh enables it after infrastructure is ready
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: supabase
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - env: dev
+            autoSync: "false"
+          - env: prod
+            autoSync: "false"
+  template:
+    metadata:
+      name: "supabase-{{env}}"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: stack-ai
+      source:
+        repoURL: https://github.com/mattsmcknight/stack-test.git
+        targetRevision: HEAD
+        path: "k8s/supabase/overlays/{{env}}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "supabase-{{env}}"
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
+  templatePatch: |
+    {{- if eq .autoSync "true" }}
+    spec:
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+    {{- end }}
+---
+# Crossplane Providers ApplicationSet
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: crossplane-providers
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - env: dev
+          - env: prod
+  template:
+    metadata:
+      name: "crossplane-providers-{{env}}"
+      annotations:
+        argocd.argoproj.io/sync-wave: "-2"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: stack-ai
+      source:
+        repoURL: https://github.com/mattsmcknight/stack-test.git
+        targetRevision: HEAD
+        path: k8s/crossplane-providers
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: crossplane-system
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true

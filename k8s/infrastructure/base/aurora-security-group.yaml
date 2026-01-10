@@ -1,0 +1,44 @@
+# Security Group for Aurora - allows traffic from EKS nodes
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: SecurityGroup
+metadata:
+  name: aurora
+  labels:
+    app.kubernetes.io/name: aurora-sg
+    app.kubernetes.io/part-of: infrastructure
+spec:
+  forProvider:
+    region: us-east-1
+    name: aurora-sg
+    description: "Security group for Aurora Serverless"
+    vpcIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: vpc
+    tags:
+      Name: aurora-sg
+  providerConfigRef:
+    name: default
+---
+# Ingress rule - allow PostgreSQL from VPC CIDR
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: SecurityGroupRule
+metadata:
+  name: aurora-postgres-ingress
+  labels:
+    app.kubernetes.io/name: aurora-sg-rule
+    app.kubernetes.io/part-of: infrastructure
+spec:
+  forProvider:
+    region: us-east-1
+    type: ingress
+    fromPort: 5432
+    toPort: 5432
+    protocol: tcp
+    cidrBlocks:
+      - 10.0.0.0/16
+    securityGroupIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: aurora-sg
+    description: "Allow PostgreSQL from VPC"
+  providerConfigRef:
+    name: default

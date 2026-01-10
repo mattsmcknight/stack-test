@@ -1,0 +1,25 @@
+# Aurora Serverless Cluster Claim
+apiVersion: infrastructure.stack.ai/v1alpha1
+kind: AuroraCluster
+metadata:
+  name: supabase
+  labels:
+    app.kubernetes.io/name: aurora
+    app.kubernetes.io/part-of: infrastructure
+spec:
+  region: us-east-1
+  engine: aurora-postgresql
+  engineVersion: "15.4"
+  databaseName: postgres
+  masterUsername: postgres
+  masterPasswordSecretRef:
+    name: aurora-credentials
+    namespace: crossplane-system
+    key: password
+  minCapacity: 0.5
+  maxCapacity: 4
+  # Populated via overlay patches
+  subnetIds: []
+  vpcSecurityGroupIds: []
+  hostedZoneId: ""
+  dnsName: postgres

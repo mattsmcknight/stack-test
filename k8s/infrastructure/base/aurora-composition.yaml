@@ -1,0 +1,272 @@
+# Composite Resource Definition for Aurora Serverless + DNS
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xauroraclusters.infrastructure.stack.ai
+spec:
+  group: infrastructure.stack.ai
+  names:
+    kind: XAuroraCluster
+    plural: xauroraclusters
+  claimNames:
+    kind: AuroraCluster
+    plural: auroraclusters
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                region:
+                  type: string
+                  default: us-east-1
+                engine:
+                  type: string
+                  default: aurora-postgresql
+                engineVersion:
+                  type: string
+                  default: "15.4"
+                databaseName:
+                  type: string
+                  default: postgres
+                masterUsername:
+                  type: string
+                  default: postgres
+                masterPasswordSecretRef:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                    key:
+                      type: string
+                  required:
+                    - name
+                    - namespace
+                    - key
+                minCapacity:
+                  type: number
+                  default: 0.5
+                maxCapacity:
+                  type: number
+                  default: 4
+                subnetIds:
+                  type: array
+                  items:
+                    type: string
+                vpcSecurityGroupIds:
+                  type: array
+                  items:
+                    type: string
+                hostedZoneId:
+                  type: string
+                  description: "Route53 hosted zone ID for DNS record"
+                dnsName:
+                  type: string
+                  default: postgres
+                  description: "DNS record name (without domain)"
+              required:
+                - subnetIds
+                - vpcSecurityGroupIds
+                - masterPasswordSecretRef
+                - hostedZoneId
+            status:
+              type: object
+              properties:
+                endpoint:
+                  type: string
+                readerEndpoint:
+                  type: string
+                fqdn:
+                  type: string
+---
+# Composition for Aurora Serverless v2 + Route53 record
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: aurora-serverless
+  labels:
+    provider: aws
+spec:
+  compositeTypeRef:
+    apiVersion: infrastructure.stack.ai/v1alpha1
+    kind: XAuroraCluster
+
+  writeConnectionSecretsToNamespace: crossplane-system
+
+  resources:
+    # DB Subnet Group
+    - name: db-subnet-group
+      base:
+        apiVersion: rds.aws.upbound.io/v1beta1
+        kind: SubnetGroup
+        spec:
+          forProvider:
+            description: "Subnet group for Aurora Serverless"
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.subnetIds
+          toFieldPath: spec.forProvider.subnetIds
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "%s-subnet-group"
+          toFieldPath: metadata.name
+
+    # Aurora Cluster
+    - name: aurora-cluster
+      base:
+        apiVersion: rds.aws.upbound.io/v1beta1
+        kind: Cluster
+        spec:
+          forProvider:
+            storageEncrypted: true
+            skipFinalSnapshot: true
+            serverlessv2ScalingConfiguration:
+              - {}
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.engine
+          toFieldPath: spec.forProvider.engine
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.engineVersion
+          toFieldPath: spec.forProvider.engineVersion
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.databaseName
+          toFieldPath: spec.forProvider.databaseName
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.masterUsername
+          toFieldPath: spec.forProvider.masterUsername
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.masterPasswordSecretRef
+          toFieldPath: spec.forProvider.masterPasswordSecretRef
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.vpcSecurityGroupIds
+          toFieldPath: spec.forProvider.vpcSecurityGroupIds
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.minCapacity
+          toFieldPath: spec.forProvider.serverlessv2ScalingConfiguration[0].minCapacity
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.maxCapacity
+          toFieldPath: spec.forProvider.serverlessv2ScalingConfiguration[0].maxCapacity
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "%s-subnet-group"
+          toFieldPath: spec.forProvider.dbSubnetGroupName
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "%s-cluster"
+          toFieldPath: metadata.name
+        # Export endpoint to status
+        - type: ToCompositeFieldPath
+          fromFieldPath: status.atProvider.endpoint
+          toFieldPath: status.endpoint
+        - type: ToCompositeFieldPath
+          fromFieldPath: status.atProvider.readerEndpoint
+          toFieldPath: status.readerEndpoint
+
+    # Aurora Instance (Serverless v2 requires at least one instance)
+    - name: aurora-instance
+      base:
+        apiVersion: rds.aws.upbound.io/v1beta1
+        kind: ClusterInstance
+        spec:
+          forProvider:
+            instanceClass: db.serverless
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.engine
+          toFieldPath: spec.forProvider.engine
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "%s-cluster"
+          toFieldPath: spec.forProvider.clusterIdentifier
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "%s-instance-0"
+          toFieldPath: metadata.name
+
+    # Route53 CNAME Record pointing to Aurora endpoint
+    - name: dns-record
+      base:
+        apiVersion: route53.aws.upbound.io/v1beta1
+        kind: Record
+        spec:
+          forProvider:
+            type: CNAME
+            ttl: 300
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.hostedZoneId
+          toFieldPath: spec.forProvider.zoneId
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.dnsName
+            strategy: string
+            string:
+              fmt: "%s"
+          toFieldPath: spec.forProvider.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: status.endpoint
+          toFieldPath: spec.forProvider.records[0]
+          policy:
+            fromFieldPath: Required
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.dnsName
+            strategy: string
+            string:
+              fmt: "%s.supabase.internal"
+          toFieldPath: status.fqdn
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "%s-dns"
+          toFieldPath: metadata.name

@@ -1,0 +1,156 @@
+# Additional NAT Gateways for HA in prod
+# Base only has NAT in zone a, prod adds b and c
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: EIP
+metadata:
+  name: nat-b
+  labels:
+    app.kubernetes.io/name: eip-nat
+    app.kubernetes.io/part-of: infrastructure
+    zone: b
+spec:
+  forProvider:
+    region: us-east-1
+    domain: vpc
+    tags:
+      Name: prod-nat-eip-b
+  providerConfigRef:
+    name: default
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: EIP
+metadata:
+  name: nat-c
+  labels:
+    app.kubernetes.io/name: eip-nat
+    app.kubernetes.io/part-of: infrastructure
+    zone: c
+spec:
+  forProvider:
+    region: us-east-1
+    domain: vpc
+    tags:
+      Name: prod-nat-eip-c
+  providerConfigRef:
+    name: default
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: NATGateway
+metadata:
+  name: nat-b
+  labels:
+    app.kubernetes.io/name: nat
+    app.kubernetes.io/part-of: infrastructure
+    zone: b
+spec:
+  forProvider:
+    region: us-east-1
+    allocationIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: eip-nat
+        zone: b
+    subnetIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: subnet-public
+        zone: b
+    tags:
+      Name: prod-nat-b
+  providerConfigRef:
+    name: default
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: NATGateway
+metadata:
+  name: nat-c
+  labels:
+    app.kubernetes.io/name: nat
+    app.kubernetes.io/part-of: infrastructure
+    zone: c
+spec:
+  forProvider:
+    region: us-east-1
+    allocationIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: eip-nat
+        zone: c
+    subnetIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: subnet-public
+        zone: c
+    tags:
+      Name: prod-nat-c
+  providerConfigRef:
+    name: default
+---
+# Separate route tables per AZ for prod (zone-local NAT)
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: RouteTable
+metadata:
+  name: private-b
+  labels:
+    app.kubernetes.io/name: rtb-private-b
+    app.kubernetes.io/part-of: infrastructure
+spec:
+  forProvider:
+    region: us-east-1
+    vpcIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: vpc
+    tags:
+      Name: prod-private-rtb-b
+  providerConfigRef:
+    name: default
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: RouteTable
+metadata:
+  name: private-c
+  labels:
+    app.kubernetes.io/name: rtb-private-c
+    app.kubernetes.io/part-of: infrastructure
+spec:
+  forProvider:
+    region: us-east-1
+    vpcIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: vpc
+    tags:
+      Name: prod-private-rtb-c
+  providerConfigRef:
+    name: default
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: Route
+metadata:
+  name: private-nat-b
+spec:
+  forProvider:
+    region: us-east-1
+    routeTableIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: rtb-private-b
+    destinationCidrBlock: 0.0.0.0/0
+    natGatewayIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: nat
+        zone: b
+  providerConfigRef:
+    name: default
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: Route
+metadata:
+  name: private-nat-c
+spec:
+  forProvider:
+    region: us-east-1
+    routeTableIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: rtb-private-c
+    destinationCidrBlock: 0.0.0.0/0
+    natGatewayIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: nat
+        zone: c
+  providerConfigRef:
+    name: default

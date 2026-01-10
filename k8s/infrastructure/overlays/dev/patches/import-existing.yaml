@@ -1,0 +1,67 @@
+# Import existing VPC (created during bootstrap)
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: VPC
+metadata:
+  name: main
+  annotations:
+    crossplane.io/external-name: "vpc-xxxxxxxxx"  # Existing VPC ID
+spec:
+  managementPolicies:
+    - Observe
+    - LateInitialize
+    - Update
+  deletionPolicy: Orphan  # Don't delete if removed from git
+---
+# Import existing EKS cluster
+apiVersion: eks.aws.upbound.io/v1beta1
+kind: Cluster
+metadata:
+  name: main
+  annotations:
+    crossplane.io/external-name: "dev-cluster"  # Existing cluster name
+spec:
+  managementPolicies:
+    - Observe
+    - LateInitialize
+    - Update
+  deletionPolicy: Orphan
+---
+# Import existing subnets
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: Subnet
+metadata:
+  name: private-a
+  annotations:
+    crossplane.io/external-name: "subnet-xxxxxxxxx"
+spec:
+  managementPolicies:
+    - Observe
+    - LateInitialize
+    - Update
+  deletionPolicy: Orphan
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: Subnet
+metadata:
+  name: private-b
+  annotations:
+    crossplane.io/external-name: "subnet-yyyyyyyyy"
+spec:
+  managementPolicies:
+    - Observe
+    - LateInitialize
+    - Update
+  deletionPolicy: Orphan
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: Subnet
+metadata:
+  name: private-c
+  annotations:
+    crossplane.io/external-name: "subnet-zzzzzzzzz"
+spec:
+  managementPolicies:
+    - Observe
+    - LateInitialize
+    - Update
+  deletionPolicy: Orphan

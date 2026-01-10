@@ -1,0 +1,7 @@
+# Patch postgres service to point to prod Aurora DNS
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  externalName: postgres-prod.supabase.internal

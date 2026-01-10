@@ -1,0 +1,19 @@
+# Route53 Private Hosted Zone for internal service discovery
+apiVersion: route53.aws.upbound.io/v1beta1
+kind: Zone
+metadata:
+  name: internal
+  labels:
+    app.kubernetes.io/name: route53-zone
+    app.kubernetes.io/part-of: infrastructure
+spec:
+  forProvider:
+    name: supabase.internal
+    vpc:
+      - vpcIdSelector:
+          matchLabels:
+            app.kubernetes.io/name: vpc
+        vpcRegion: us-east-1
+    comment: "Private hosted zone for Supabase internal services"
+  providerConfigRef:
+    name: default

@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - vpc.yaml
+  - nat.yaml
+  - routes.yaml
+  - eks-iam.yaml
+  - eks-composition.yaml
+  - eks-claim.yaml
+  - aws-lb-controller-composition.yaml
+  - aws-lb-controller-claim.yaml
+  - route53.yaml
+  - aurora-security-group.yaml
+  - aurora-composition.yaml
+  - aurora-claim.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: infrastructure

@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: argocd
+
+resources:
+  - namespace.yaml
+  # ArgoCD upstream manifests (HA install)
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v2.10.0/manifests/install.yaml
+  - project.yaml
+  - applicationsets.yaml

@@ -1,0 +1,174 @@
+# Public Route Table
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: RouteTable
+metadata:
+  name: public
+  labels:
+    app.kubernetes.io/name: rtb-public
+    app.kubernetes.io/part-of: infrastructure
+spec:
+  forProvider:
+    region: us-east-1
+    vpcIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: vpc
+    tags:
+      Name: public-rtb
+  providerConfigRef:
+    name: default
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: Route
+metadata:
+  name: public-internet
+spec:
+  forProvider:
+    region: us-east-1
+    routeTableIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: rtb-public
+    destinationCidrBlock: 0.0.0.0/0
+    gatewayIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: igw
+  providerConfigRef:
+    name: default
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: RouteTableAssociation
+metadata:
+  name: public-a
+spec:
+  forProvider:
+    region: us-east-1
+    routeTableIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: rtb-public
+    subnetIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: subnet-public
+        zone: a
+  providerConfigRef:
+    name: default
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: RouteTableAssociation
+metadata:
+  name: public-b
+spec:
+  forProvider:
+    region: us-east-1
+    routeTableIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: rtb-public
+    subnetIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: subnet-public
+        zone: b
+  providerConfigRef:
+    name: default
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: RouteTableAssociation
+metadata:
+  name: public-c
+spec:
+  forProvider:
+    region: us-east-1
+    routeTableIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: rtb-public
+    subnetIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: subnet-public
+        zone: c
+  providerConfigRef:
+    name: default
+---
+# Private Route Table
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: RouteTable
+metadata:
+  name: private
+  labels:
+    app.kubernetes.io/name: rtb-private
+    app.kubernetes.io/part-of: infrastructure
+spec:
+  forProvider:
+    region: us-east-1
+    vpcIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: vpc
+    tags:
+      Name: private-rtb
+  providerConfigRef:
+    name: default
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: Route
+metadata:
+  name: private-nat
+spec:
+  forProvider:
+    region: us-east-1
+    routeTableIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: rtb-private
+    destinationCidrBlock: 0.0.0.0/0
+    natGatewayIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: nat
+        zone: a
+  providerConfigRef:
+    name: default
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: RouteTableAssociation
+metadata:
+  name: private-a
+spec:
+  forProvider:
+    region: us-east-1
+    routeTableIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: rtb-private
+    subnetIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: subnet-private
+        zone: a
+  providerConfigRef:
+    name: default
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: RouteTableAssociation
+metadata:
+  name: private-b
+spec:
+  forProvider:
+    region: us-east-1
+    routeTableIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: rtb-private
+    subnetIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: subnet-private
+        zone: b
+  providerConfigRef:
+    name: default
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: RouteTableAssociation
+metadata:
+  name: private-c
+spec:
+  forProvider:
+    region: us-east-1
+    routeTableIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: rtb-private
+    subnetIdSelector:
+      matchLabels:
+        app.kubernetes.io/name: subnet-private
+        zone: c
+  providerConfigRef:
+    name: default
