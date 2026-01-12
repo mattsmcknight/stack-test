@@ -18,7 +18,7 @@ spec:
       finalizers:
         - resources-finalizer.argocd.argoproj.io
     spec:
-      project: stack-ai
+      project: stack-test
       source:
         repoURL: https://github.com/mattsmcknight/stack-test.git
         targetRevision: HEAD
@@ -55,7 +55,7 @@ spec:
       finalizers:
         - resources-finalizer.argocd.argoproj.io
     spec:
-      project: stack-ai
+      project: stack-test
       source:
         repoURL: https://github.com/mattsmcknight/stack-test.git
         targetRevision: HEAD
@@ -103,7 +103,7 @@ spec:
       finalizers:
         - resources-finalizer.argocd.argoproj.io
     spec:
-      project: stack-ai
+      project: stack-test
       source:
         repoURL: https://github.com/mattsmcknight/stack-test.git
         targetRevision: HEAD
@@ -149,7 +149,7 @@ spec:
       finalizers:
         - resources-finalizer.argocd.argoproj.io
     spec:
-      project: stack-ai
+      project: stack-test
       source:
         repoURL: https://github.com/mattsmcknight/stack-test.git
         targetRevision: HEAD

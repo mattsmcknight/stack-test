@@ -1,6 +1,6 @@
-# Platform CLI
+# Infractl
 
-CLI tool for managing stack-ai platform deployments.
+CLI tool for managing stack-test infrastructure deployments.
 
 ## Installation
 
@@ -14,25 +14,26 @@ pip install -e .
 ### Bootstrap a dev environment
 
 ```bash
-platform bootstrap dev
+infractl bootstrap dev
 ```
 
 ### Bootstrap a prod environment
 
 ```bash
-platform bootstrap prod
+infractl bootstrap prod
 ```
 
 ### Options
 
 ```bash
-platform bootstrap dev --help
+infractl bootstrap dev --help
 
 Options:
-  -n, --cluster-name TEXT   EKS cluster name [default: stack-ai-dev]
+  -n, --cluster-name TEXT   EKS cluster name [default: stack-test-dev]
   -r, --region TEXT         AWS region [default: us-east-1]
   --skip-cluster-create     Skip EKS cluster creation (use existing cluster)
   --skip-git-push           Skip git commit and push
+  --skip-sync               Skip ArgoCD sync orchestration
   --help                    Show this message and exit
 ```
 
@@ -40,16 +41,19 @@ Options:
 
 ```bash
 # Dev environment with custom name
-platform bootstrap dev --cluster-name my-dev-cluster
+infractl bootstrap dev --cluster-name my-dev-cluster
 
 # Prod in different region
-platform bootstrap prod --region us-west-2
+infractl bootstrap prod --region us-west-2
 
 # Use existing cluster (skip eksctl create)
-platform bootstrap dev --skip-cluster-create
+infractl bootstrap dev --skip-cluster-create
 
 # Don't push to git (for testing)
-platform bootstrap dev --skip-git-push
+infractl bootstrap dev --skip-git-push
+
+# Skip automatic sync (let ArgoCD sync on its own schedule)
+infractl bootstrap dev --skip-sync
 ```
 
 ## What Bootstrap Does
@@ -64,6 +68,7 @@ platform bootstrap dev --skip-git-push
 | 6 | Generates import-existing.yaml for the overlay |
 | 7 | Commits and pushes to git |
 | 8 | Applies ArgoCD ApplicationSets |
+| 9 | Syncs applications in dependency order |
 
 Then ArgoCD takes over and syncs:
 - Wave -3: Crossplane
@@ -80,10 +85,10 @@ pip install -e ".[dev]"
 pytest
 
 # Type checking
-mypy platform
+mypy infractl
 
 # Linting
-ruff check platform
+ruff check infractl
 ```
 
 ## Project Structure
@@ -94,12 +99,13 @@ k8s/bootstrap/platform/
 ├── README.md
 ├── cluster.yaml                # eksctl cluster template
 ├── permission-boundary.json    # IAM permission boundary
-└── platform/
+└── infractl/
     ├── cli.py                  # Main entry point
     ├── config.py               # Configuration dataclasses
     ├── commands/
     │   └── bootstrap.py        # Bootstrap command
     └── services/
+        ├── argocd.py           # ArgoCD REST API operations
         ├── aws.py              # AWS operations (IAM, EC2, EKS)
         ├── eksctl.py           # eksctl operations
         ├── git.py              # Git operations

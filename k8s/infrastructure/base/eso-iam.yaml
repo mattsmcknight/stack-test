@@ -52,7 +52,7 @@ spec:
               "secretsmanager:DescribeSecret",
               "secretsmanager:ListSecrets"
             ],
-            "Resource": "arn:aws:secretsmanager:*:*:secret:stack-ai/*"
+            "Resource": "arn:aws:secretsmanager:*:*:secret:stack-test/*"
           },
           {
             "Effect": "Allow",

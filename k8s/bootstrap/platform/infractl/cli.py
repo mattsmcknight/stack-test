@@ -7,7 +7,7 @@ from infractl.commands import bootstrap
 
 app = typer.Typer(
     name="infractl",
-    help="CLI tool for managing stack-ai infrastructure deployments",
+    help="CLI tool for managing stack-test infrastructure deployments",
     no_args_is_help=True,
 )
 
@@ -20,7 +20,7 @@ app.add_typer(bootstrap.app, name="bootstrap")
 @app.callback()
 def main() -> None:
     """
-    Infractl - Manage stack-ai Kubernetes infrastructure.
+    Infractl - Manage stack-test Kubernetes infrastructure.
 
     Use 'infractl bootstrap' to create new environments.
     """

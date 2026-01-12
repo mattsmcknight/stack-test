@@ -1,8 +1,8 @@
-# ArgoCD Project for stack-ai
+# ArgoCD Project for stack-test
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
-  name: stack-ai
+  name: stack-test
   namespace: argocd
 spec:
   description: "Stack AI platform components"
