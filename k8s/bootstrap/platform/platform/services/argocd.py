@@ -1,77 +1,225 @@
 """ArgoCD service interactions."""
 
-import subprocess
+import base64
+import socket
+import threading
 import time
-from typing import Literal
+from contextlib import contextmanager
+from typing import Any, Generator
 
+import requests
+from kubernetes import client, config
+from kubernetes.stream import portforward
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 console = Console()
 
-AppStatus = Literal["Healthy", "Progressing", "Degraded", "Suspended", "Missing", "Unknown"]
+
+class _PortForwarder:
+    """Local TCP server that forwards connections through kubernetes portforward."""
+
+    def __init__(self, pf: Any, remote_port: int, local_port: int = 0) -> None:
+        self._pf = pf
+        self._remote_port = remote_port
+        self._server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._server.settimeout(1.0)
+        self._server.bind(("127.0.0.1", local_port))
+        self._server.listen(5)
+        self._local_port = self._server.getsockname()[1]
+        self._running = False
+        self._thread: threading.Thread | None = None
+
+    @property
+    def local_port(self) -> int:
+        return self._local_port
+
+    def start(self) -> None:
+        self._running = True
+        self._thread = threading.Thread(target=self._accept_loop, daemon=True)
+        self._thread.start()
+        time.sleep(0.1)  # Give the server a moment to start
+
+    def stop(self) -> None:
+        self._running = False
+        self._server.close()
+        if self._thread:
+            self._thread.join(timeout=2)
+
+    def _accept_loop(self) -> None:
+        while self._running:
+            try:
+                conn, _ = self._server.accept()
+                threading.Thread(
+                    target=self._handle_connection,
+                    args=(conn,),
+                    daemon=True,
+                ).start()
+            except socket.timeout:
+                continue
+            except OSError:
+                break
+
+    def _handle_connection(self, local_conn: socket.socket) -> None:
+        try:
+            pf_socket = self._pf.socket(self._remote_port)
+            # Start bidirectional forwarding
+            t = threading.Thread(
+                target=self._forward,
+                args=(local_conn, pf_socket),
+                daemon=True,
+            )
+            t.start()
+            self._forward(pf_socket, local_conn)
+            t.join(timeout=1)
+        except Exception:
+            pass
+        finally:
+            try:
+                local_conn.close()
+            except Exception:
+                pass
+
+    def _forward(self, src: socket.socket, dst: socket.socket) -> None:
+        try:
+            while self._running:
+                data = src.recv(4096)
+                if not data:
+                    break
+                dst.sendall(data)
+        except Exception:
+            pass
 
 
 class ArgoCDService:
-    """Service for ArgoCD operations."""
+    """Service for ArgoCD operations via REST API."""
 
-    def get_app_status(self, app_name: str) -> tuple[str, str]:
-        """Get the sync and health status of an application."""
-        result = subprocess.run(
-            [
-                "kubectl", "get", "application", app_name,
-                "-n", "argocd",
-                "-o", "jsonpath={.status.sync.status},{.status.health.status}",
-            ],
-            capture_output=True,
-            text=True,
+    def __init__(self) -> None:
+        self._token: str | None = None
+        config.load_kube_config()
+        self._v1 = client.CoreV1Api()
+
+    def _get_admin_password(self) -> str:
+        """Get the ArgoCD admin password from the secret."""
+        secret = self._v1.read_namespaced_secret(
+            name="argocd-initial-admin-secret",
+            namespace="argocd",
         )
-        if result.returncode != 0:
+        return base64.b64decode(secret.data["password"]).decode()
+
+    @contextmanager
+    def _port_forward(self, local_port: int = 8080) -> Generator[str, None, None]:
+        """Context manager for port-forwarding to ArgoCD server."""
+        # Find argocd-server pod
+        pods = self._v1.list_namespaced_pod(
+            namespace="argocd",
+            label_selector="app.kubernetes.io/name=argocd-server",
+        )
+        if not pods.items:
+            raise RuntimeError("No argocd-server pod found")
+
+        pod_name = pods.items[0].metadata.name
+
+        # Create kubernetes portforward
+        pf = portforward(
+            self._v1.connect_get_namespaced_pod_portforward,
+            pod_name,
+            "argocd",
+            ports="8443",
+        )
+
+        # Create local proxy server
+        forwarder = _PortForwarder(pf, 8443, local_port)
+        forwarder.start()
+
+        try:
+            yield f"https://localhost:{forwarder.local_port}"
+        finally:
+            forwarder.stop()
+
+    def _get_token(self, base_url: str) -> str:
+        """Get an auth token from ArgoCD."""
+        if self._token:
+            return self._token
+
+        password = self._get_admin_password()
+
+        response = requests.post(
+            f"{base_url}/api/v1/session",
+            json={"username": "admin", "password": password},
+            verify=False,  # Self-signed cert
+            timeout=10,
+        )
+        response.raise_for_status()
+
+        self._token = response.json()["token"]
+        return self._token
+
+    def _api_request(
+        self,
+        base_url: str,
+        method: str,
+        path: str,
+        **kwargs: Any,
+    ) -> requests.Response:
+        """Make an authenticated API request."""
+        token = self._get_token(base_url)
+        headers = kwargs.pop("headers", {})
+        headers["Authorization"] = f"Bearer {token}"
+
+        response = requests.request(
+            method,
+            f"{base_url}{path}",
+            headers=headers,
+            verify=False,
+            timeout=30,
+            **kwargs,
+        )
+        return response
+
+    def get_app(self, base_url: str, app_name: str) -> dict[str, Any] | None:
+        """Get application details."""
+        response = self._api_request(base_url, "GET", f"/api/v1/applications/{app_name}")
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        return response.json()
+
+    def get_app_status(self, base_url: str, app_name: str) -> tuple[str, str]:
+        """Get the sync and health status of an application."""
+        app = self.get_app(base_url, app_name)
+        if not app:
             return "Unknown", "Unknown"
 
-        parts = result.stdout.strip().split(",")
-        sync_status = parts[0] if len(parts) > 0 else "Unknown"
-        health_status = parts[1] if len(parts) > 1 else "Unknown"
+        status = app.get("status", {})
+        sync_status = status.get("sync", {}).get("status", "Unknown")
+        health_status = status.get("health", {}).get("status", "Unknown")
         return sync_status, health_status
 
-    def app_exists(self, app_name: str) -> bool:
-        """Check if an application exists."""
-        result = subprocess.run(
-            ["kubectl", "get", "application", app_name, "-n", "argocd"],
-            capture_output=True,
-        )
-        return result.returncode == 0
-
-    def sync_app(self, app_name: str, timeout: int = 300) -> bool:
+    def sync_app(self, base_url: str, app_name: str) -> bool:
         """Trigger a sync for an application."""
         console.print(f"[blue]Syncing {app_name}...[/blue]")
 
-        # Trigger sync via annotation refresh
-        subprocess.run(
-            [
-                "kubectl", "patch", "application", app_name,
-                "-n", "argocd",
-                "--type", "merge",
-                "-p", '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}',
-            ],
-            check=True,
+        response = self._api_request(
+            base_url,
+            "POST",
+            f"/api/v1/applications/{app_name}/sync",
+            json={
+                "prune": True,
+                "strategy": {"apply": {"force": False}},
+            },
         )
 
-        # Also trigger actual sync operation
-        subprocess.run(
-            [
-                "kubectl", "patch", "application", app_name,
-                "-n", "argocd",
-                "--type", "merge",
-                "-p", '{"operation":{"initiatedBy":{"username":"platform-cli"},"sync":{}}}',
-            ],
-            capture_output=True,  # Don't fail if operation already in progress
-        )
+        if response.status_code in (200, 201):
+            return True
 
-        return True
+        console.print(f"[yellow]Sync request returned {response.status_code}[/yellow]")
+        return False
 
     def wait_for_health(
         self,
+        base_url: str,
         app_name: str,
         timeout: int = 600,
         target_health: str = "Healthy",
@@ -87,7 +235,7 @@ class ArgoCDService:
             task = progress.add_task(f"Waiting for {app_name}...", total=None)
 
             while time.time() - start_time < timeout:
-                sync_status, health_status = self.get_app_status(app_name)
+                sync_status, health_status = self.get_app_status(base_url, app_name)
                 progress.update(
                     task,
                     description=f"Waiting for {app_name} (sync: {sync_status}, health: {health_status})",
@@ -106,18 +254,36 @@ class ArgoCDService:
         console.print(f"[yellow]Timeout waiting for {app_name}[/yellow]")
         return False
 
-    def enable_auto_sync(self, app_name: str) -> None:
+    def enable_auto_sync(self, base_url: str, app_name: str) -> None:
         """Enable auto-sync for an application."""
-        subprocess.run(
-            [
-                "kubectl", "patch", "application", app_name,
-                "-n", "argocd",
-                "--type", "merge",
-                "-p", '{"spec":{"syncPolicy":{"automated":{"prune":true,"selfHeal":true}}}}',
-            ],
-            check=True,
+        # Get current app spec
+        app = self.get_app(base_url, app_name)
+        if not app:
+            console.print(f"[red]Application {app_name} not found[/red]")
+            return
+
+        # Update sync policy
+        response = self._api_request(
+            base_url,
+            "PATCH",
+            f"/api/v1/applications/{app_name}",
+            headers={"Content-Type": "application/merge-patch+json"},
+            json={
+                "spec": {
+                    "syncPolicy": {
+                        "automated": {
+                            "prune": True,
+                            "selfHeal": True,
+                        }
+                    }
+                }
+            },
         )
-        console.print(f"[green]Enabled auto-sync for {app_name}[/green]")
+
+        if response.status_code == 200:
+            console.print(f"[green]Enabled auto-sync for {app_name}[/green]")
+        else:
+            console.print(f"[yellow]Failed to enable auto-sync: {response.status_code}[/yellow]")
 
     def sync_in_order(self, env: str) -> bool:
         """
@@ -130,36 +296,41 @@ class ArgoCDService:
         4. supabase - Deploy the application
         """
         apps = [
-            (f"crossplane-{env}", 300, True),      # (name, timeout, enable_auto_sync)
-            (f"crossplane-providers-{env}", 600, True),
-            (f"infrastructure-{env}", 900, True),  # Aurora can take a while
-            (f"supabase-{env}", 300, True),
+            (f"crossplane-{env}", 300),
+            (f"crossplane-providers-{env}", 600),
+            (f"infrastructure-{env}", 900),  # Aurora can take a while
+            (f"supabase-{env}", 300),
         ]
 
         console.print(f"\n[bold]Syncing applications for {env} environment[/bold]")
-        console.print("Order: crossplane → providers → infrastructure → supabase\n")
+        console.print("Order: crossplane -> providers -> infrastructure -> supabase\n")
 
-        for app_name, timeout, enable_auto in apps:
-            # Wait for app to exist (ApplicationSet may take a moment)
-            retries = 0
-            while not self.app_exists(app_name) and retries < 12:
-                time.sleep(5)
-                retries += 1
+        # Suppress SSL warnings for self-signed cert
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-            if not self.app_exists(app_name):
-                console.print(f"[red]Application {app_name} not found[/red]")
-                return False
+        with self._port_forward() as base_url:
+            for app_name, timeout in apps:
+                # Wait for app to exist (ApplicationSet may take a moment)
+                retries = 0
+                while self.get_app(base_url, app_name) is None and retries < 12:
+                    console.print(f"[dim]Waiting for {app_name} to be created...[/dim]")
+                    time.sleep(5)
+                    retries += 1
 
-            # Sync and wait
-            self.sync_app(app_name)
-            if not self.wait_for_health(app_name, timeout):
-                console.print(f"[red]Failed to sync {app_name}[/red]")
-                console.print("[yellow]You may need to check ArgoCD UI for details[/yellow]")
-                return False
+                if self.get_app(base_url, app_name) is None:
+                    console.print(f"[red]Application {app_name} not found[/red]")
+                    return False
 
-            # Enable auto-sync after successful initial sync
-            if enable_auto:
-                self.enable_auto_sync(app_name)
+                # Sync and wait
+                self.sync_app(base_url, app_name)
+                if not self.wait_for_health(base_url, app_name, timeout):
+                    console.print(f"[red]Failed to sync {app_name}[/red]")
+                    console.print("[yellow]Check ArgoCD UI for details[/yellow]")
+                    return False
+
+                # Enable auto-sync after successful initial sync
+                self.enable_auto_sync(base_url, app_name)
 
         console.print("\n[green]All applications synced successfully![/green]")
         return True
