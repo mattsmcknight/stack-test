@@ -7,7 +7,7 @@ from pathlib import Path
 import yaml
 from rich.console import Console
 
-from platform.config import ClusterConfig
+from infractl.config import ClusterConfig
 
 console = Console()
 

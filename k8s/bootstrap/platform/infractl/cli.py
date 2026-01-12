@@ -3,11 +3,11 @@
 import typer
 from rich.console import Console
 
-from platform.commands import bootstrap
+from infractl.commands import bootstrap
 
 app = typer.Typer(
-    name="platform",
-    help="CLI tool for managing stack-ai platform deployments",
+    name="infractl",
+    help="CLI tool for managing stack-ai infrastructure deployments",
     no_args_is_help=True,
 )
 
@@ -20,9 +20,9 @@ app.add_typer(bootstrap.app, name="bootstrap")
 @app.callback()
 def main() -> None:
     """
-    Platform CLI - Manage stack-ai Kubernetes deployments.
+    Infractl - Manage stack-ai Kubernetes infrastructure.
 
-    Use 'platform bootstrap' to create new environments.
+    Use 'infractl bootstrap' to create new environments.
     """
     pass
 

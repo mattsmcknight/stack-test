@@ -27,7 +27,7 @@ class _PortForwarder:
         self._server.settimeout(1.0)
         self._server.bind(("127.0.0.1", local_port))
         self._server.listen(5)
-        self._local_port = self._server.getsockname()[1]
+        self._local_port: int = self._server.getsockname()[1]
         self._running = False
         self._thread: threading.Thread | None = None
 
@@ -184,7 +184,8 @@ class ArgoCDService:
         if response.status_code == 404:
             return None
         response.raise_for_status()
-        return response.json()
+        result: dict[str, Any] = response.json()
+        return result
 
     def get_app_status(self, base_url: str, app_name: str) -> tuple[str, str]:
         """Get the sync and health status of an application."""

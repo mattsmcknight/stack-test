@@ -6,7 +6,7 @@ from typing import Any
 import boto3
 from rich.console import Console
 
-from platform.config import ClusterConfig
+from infractl.config import ClusterConfig
 
 console = Console()
 
@@ -24,12 +24,12 @@ class AWSService:
     def get_account_id(self) -> str:
         """Get the current AWS account ID."""
         response = self.sts.get_caller_identity()
-        return response["Account"]
+        return str(response["Account"])
 
     def get_cluster_info(self, cluster_name: str) -> dict[str, Any]:
         """Get EKS cluster information."""
         response = self.eks.describe_cluster(name=cluster_name)
-        return response["cluster"]
+        return dict(response["cluster"])
 
     def get_vpc_subnets(self, vpc_id: str) -> dict[str, dict[str, str]]:
         """Get subnet information for a VPC."""
@@ -58,7 +58,7 @@ class AWSService:
             Filters=[{"Name": "attachment.vpc-id", "Values": [vpc_id]}]
         )
         if response["InternetGateways"]:
-            return response["InternetGateways"][0]["InternetGatewayId"]
+            return str(response["InternetGateways"][0]["InternetGatewayId"])
         return ""
 
     def get_nat_gateway(self, vpc_id: str) -> str:
@@ -70,7 +70,7 @@ class AWSService:
             ]
         )
         if response["NatGateways"]:
-            return response["NatGateways"][0]["NatGatewayId"]
+            return str(response["NatGateways"][0]["NatGatewayId"])
         return ""
 
     def populate_cluster_config(self, config: ClusterConfig) -> ClusterConfig:
@@ -109,7 +109,7 @@ class AWSService:
         except self.iam.exceptions.NoSuchEntityException:
             return False
 
-    def create_permission_boundary(self, config: ClusterConfig, policy_document: dict) -> None:
+    def create_permission_boundary(self, config: ClusterConfig, policy_document: dict[str, Any]) -> None:
         """Create the Crossplane permission boundary policy."""
         if self.policy_exists(config.permission_boundary_arn):
             console.print(
