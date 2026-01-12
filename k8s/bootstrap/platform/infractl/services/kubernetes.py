@@ -1,7 +1,7 @@
 """Kubernetes service interactions."""
 
+import base64
 import subprocess
-import time
 from pathlib import Path
 
 import yaml
@@ -109,9 +109,12 @@ class KubernetesService:
         self.apply_manifest(yaml.dump(configmap))
         console.print("[green]Created cluster-info ConfigMap[/green]")
 
-    def install_argocd(self, version: str = "v2.10.0") -> None:
-        """Install ArgoCD."""
+    def install_argocd(self, admin_password: str, version: str = "v2.10.0") -> None:
+        """Install ArgoCD with a specific admin password."""
         self.create_namespace("argocd")
+
+        # Create the admin secret before installing ArgoCD
+        self._create_argocd_admin_secret(admin_password)
 
         console.print("[blue]Installing ArgoCD...[/blue]")
         self.apply_url(
@@ -121,6 +124,23 @@ class KubernetesService:
 
         self.wait_for_deployment("argocd-server", "argocd")
         console.print("[green]ArgoCD installed successfully[/green]")
+
+    def _create_argocd_admin_secret(self, password: str) -> None:
+        """Create the ArgoCD initial admin secret."""
+        secret = {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": {
+                "name": "argocd-initial-admin-secret",
+                "namespace": "argocd",
+            },
+            "type": "Opaque",
+            "data": {
+                "password": base64.b64encode(password.encode()).decode(),
+            },
+        }
+        self.apply_manifest(yaml.dump(secret))
+        console.print("[green]Created ArgoCD admin secret[/green]")
 
     def apply_applicationsets(self, argocd_path: Path) -> None:
         """Apply ArgoCD project and applicationsets."""

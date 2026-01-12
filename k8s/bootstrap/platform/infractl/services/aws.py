@@ -1,9 +1,12 @@
 """AWS service interactions."""
 
 import json
+import secrets
+import string
 from typing import Any
 
 import boto3
+from botocore.exceptions import ClientError
 from rich.console import Console
 
 from infractl.config import ClusterConfig
@@ -20,6 +23,7 @@ class AWSService:
         self.ec2 = boto3.client("ec2", region_name=region)
         self.eks = boto3.client("eks", region_name=region)
         self.iam = boto3.client("iam", region_name=region)
+        self.secretsmanager = boto3.client("secretsmanager", region_name=region)
 
     def get_account_id(self) -> str:
         """Get the current AWS account ID."""
@@ -170,3 +174,29 @@ class AWSService:
             ["aws", "eks", "update-kubeconfig", "--name", cluster_name, "--region", self.region],
             check=True,
         )
+
+    def _generate_password(self, length: int = 32) -> str:
+        """Generate a secure random password."""
+        alphabet = string.ascii_letters + string.digits
+        return "".join(secrets.choice(alphabet) for _ in range(length))
+
+    def get_or_create_argocd_password(self, secret_name: str) -> str:
+        """Get existing ArgoCD password or create a new one in Secrets Manager."""
+        # Try to get existing secret
+        try:
+            response = self.secretsmanager.get_secret_value(SecretId=secret_name)
+            console.print(f"[yellow]ArgoCD password already exists in {secret_name}[/yellow]")
+            return str(response["SecretString"])
+        except ClientError as e:
+            if e.response["Error"]["Code"] != "ResourceNotFoundException":
+                raise
+
+        # Create new password
+        password = self._generate_password()
+        self.secretsmanager.create_secret(
+            Name=secret_name,
+            SecretString=password,
+            Description="ArgoCD admin password",
+        )
+        console.print(f"[green]Created ArgoCD password in {secret_name}[/green]")
+        return password

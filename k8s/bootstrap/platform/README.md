@@ -81,9 +81,6 @@ Then ArgoCD takes over and syncs:
 # Install with dev dependencies
 pip install -e ".[dev]"
 
-# Run tests
-pytest
-
 # Type checking
 mypy infractl
 

@@ -70,8 +70,8 @@ This will:
 ### 3. Access ArgoCD UI
 
 ```bash
-# Get the admin password
-kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d
+# Get the admin password (stored in AWS Secrets Manager)
+aws secretsmanager get-secret-value --secret-id <cluster-name>/argocd/admin --query SecretString --output text
 
 # Port forward
 kubectl port-forward svc/argocd-server -n argocd 8080:443
@@ -184,7 +184,4 @@ mypy infractl
 
 # Linting
 ruff check infractl
-
-# Run tests
-pytest
 ```

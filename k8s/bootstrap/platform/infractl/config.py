@@ -49,6 +49,10 @@ class ClusterConfig:
     def permission_boundary_arn(self) -> str:
         return f"arn:aws:iam::{self.account_id}:policy/{self.permission_boundary_name}"
 
+    @property
+    def argocd_secret_name(self) -> str:
+        return f"{self.cluster_name}/argocd/admin"
+
 
 @dataclass
 class Paths:

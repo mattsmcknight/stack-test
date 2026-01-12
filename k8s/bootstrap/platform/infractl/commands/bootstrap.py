@@ -225,7 +225,8 @@ def _bootstrap(
 
     # Phase 4: Install ArgoCD
     console.print("\n[bold]Phase 4: Install ArgoCD[/bold]")
-    k8s.install_argocd()
+    argocd_password = aws.get_or_create_argocd_password(config.argocd_secret_name)
+    k8s.install_argocd(argocd_password)
 
     # Phase 5: Create Crossplane namespace and cluster-info
     console.print("\n[bold]Phase 5: Setup Crossplane namespace[/bold]")
@@ -292,7 +293,7 @@ def _print_summary(config: ClusterConfig) -> None:
     # ArgoCD access
     console.print("\n[bold]ArgoCD Access[/bold]")
     console.print("Get admin password:")
-    console.print("  [dim]kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d[/dim]")
+    console.print(f"  [dim]aws secretsmanager get-secret-value --secret-id {config.argocd_secret_name} --query SecretString --output text[/dim]")
     console.print("\nPort-forward UI:")
     console.print("  [dim]kubectl port-forward svc/argocd-server -n argocd 8080:443[/dim]")
     console.print("\nOpen: [link]https://localhost:8080[/link] (username: admin)")
