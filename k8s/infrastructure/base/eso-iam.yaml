@@ -1,0 +1,103 @@
+# IAM Role for External Secrets Operator (IRSA)
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: Role
+metadata:
+  name: external-secrets-role
+  labels:
+    app.kubernetes.io/name: external-secrets
+spec:
+  forProvider:
+    assumeRolePolicy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "Federated": "arn:aws:iam::ACCOUNT_ID:oidc-provider/oidc.eks.REGION.amazonaws.com/id/OIDC_ID"
+            },
+            "Action": "sts:AssumeRoleWithWebIdentity",
+            "Condition": {
+              "StringEquals": {
+                "oidc.eks.REGION.amazonaws.com/id/OIDC_ID:sub": "system:serviceaccount:external-secrets:external-secrets",
+                "oidc.eks.REGION.amazonaws.com/id/OIDC_ID:aud": "sts.amazonaws.com"
+              }
+            }
+          }
+        ]
+      }
+    description: "IAM role for External Secrets Operator"
+    tags:
+      - key: app.kubernetes.io/name
+        value: external-secrets
+---
+# IAM Policy for reading secrets from AWS Secrets Manager
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: Policy
+metadata:
+  name: external-secrets-policy
+  labels:
+    app.kubernetes.io/name: external-secrets
+spec:
+  forProvider:
+    description: "Policy for External Secrets Operator to read from Secrets Manager"
+    policy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "secretsmanager:GetSecretValue",
+              "secretsmanager:DescribeSecret",
+              "secretsmanager:ListSecrets"
+            ],
+            "Resource": "arn:aws:secretsmanager:*:*:secret:stack-ai/*"
+          },
+          {
+            "Effect": "Allow",
+            "Action": [
+              "kms:Decrypt",
+              "kms:DescribeKey"
+            ],
+            "Resource": "*",
+            "Condition": {
+              "StringEquals": {
+                "kms:ViaService": "secretsmanager.*.amazonaws.com"
+              }
+            }
+          }
+        ]
+      }
+---
+# Attach policy to role
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: RolePolicyAttachment
+metadata:
+  name: external-secrets-policy-attachment
+spec:
+  forProvider:
+    policyArnRef:
+      name: external-secrets-policy
+    roleRef:
+      name: external-secrets-role
+---
+# ServiceAccount for External Secrets Operator with IRSA annotation
+# Created after the IAM role so we can reference the ARN
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  name: external-secrets-serviceaccount
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: external-secrets
+        namespace: external-secrets
+        annotations:
+          # Role ARN is patched by overlay with actual account ID and OIDC ID
+          eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT_ID:role/external-secrets-role"
+  providerConfigRef:
+    name: kubernetes-provider

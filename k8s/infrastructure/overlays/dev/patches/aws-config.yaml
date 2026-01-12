@@ -53,6 +53,43 @@ spec:
     - sg-dev-aurora
   hostedZoneId: Z0123456789DEV
 ---
+# External Secrets Operator IAM Role - dev configuration
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: Role
+metadata:
+  name: external-secrets-role
+spec:
+  forProvider:
+    assumeRolePolicy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "Federated": "arn:aws:iam::111111111111:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/DEV_OIDC_ID"
+            },
+            "Action": "sts:AssumeRoleWithWebIdentity",
+            "Condition": {
+              "StringEquals": {
+                "oidc.eks.us-east-1.amazonaws.com/id/DEV_OIDC_ID:sub": "system:serviceaccount:external-secrets:external-secrets",
+                "oidc.eks.us-east-1.amazonaws.com/id/DEV_OIDC_ID:aud": "sts.amazonaws.com"
+              }
+            }
+          }
+        ]
+      }
+---
+# ClusterSecretStore region patch
+apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: aws-secrets-manager
+spec:
+  provider:
+    aws:
+      region: us-east-1
+---
 # VPC
 apiVersion: ec2.aws.upbound.io/v1beta1
 kind: VPC

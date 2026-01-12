@@ -14,3 +14,4 @@ commonLabels:
 patches:
   - path: patches/resources.yaml
   - path: patches/postgres.yaml
+  - path: patches/external-secrets.yaml

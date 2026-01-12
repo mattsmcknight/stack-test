@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
   - providers.yaml
   - provider-config.yaml
+  - external-secrets.yaml

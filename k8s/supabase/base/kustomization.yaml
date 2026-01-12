@@ -5,7 +5,7 @@ namespace: supabase
 
 resources:
   - namespace.yaml
-  - secrets.yaml
+  - external-secrets.yaml
   - configmap.yaml
   - postgres.yaml
   - kong.yaml

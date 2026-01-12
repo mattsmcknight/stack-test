@@ -2,6 +2,8 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
+  - config-from-cluster-info.yaml
+  - secrets-init-job.yaml
   - vpc.yaml
   - nat.yaml
   - routes.yaml
@@ -14,6 +16,8 @@ resources:
   - aurora-security-group.yaml
   - aurora-composition.yaml
   - aurora-claim.yaml
+  - eso-iam.yaml
+  - secrets-manager.yaml
 
 commonLabels:
   app.kubernetes.io/part-of: infrastructure

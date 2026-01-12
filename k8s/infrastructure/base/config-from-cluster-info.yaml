@@ -1,0 +1,106 @@
+# Crossplane EnvironmentConfig to read values from cluster-info ConfigMap
+# This allows Crossplane Compositions to reference dynamic values
+apiVersion: apiextensions.crossplane.io/v1alpha1
+kind: EnvironmentConfig
+metadata:
+  name: cluster-info
+spec:
+  data:
+    # These are populated by a Job that reads from the cluster-info ConfigMap
+    # and updates this EnvironmentConfig
+    accountId: ""
+    region: ""
+    vpcId: ""
+    oidcProvider: ""
+    privateSubnetA: ""
+    privateSubnetB: ""
+    privateSubnetC: ""
+---
+# Job to sync cluster-info ConfigMap to EnvironmentConfig
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sync-cluster-info
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      serviceAccountName: config-sync
+      restartPolicy: OnFailure
+      containers:
+        - name: sync
+          image: bitnami/kubectl:1.29
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+
+              # Read from cluster-info ConfigMap
+              ACCOUNT_ID=$(kubectl get configmap cluster-info -n crossplane-system -o jsonpath='{.data.account_id}')
+              REGION=$(kubectl get configmap cluster-info -n crossplane-system -o jsonpath='{.data.region}')
+              VPC_ID=$(kubectl get configmap cluster-info -n crossplane-system -o jsonpath='{.data.vpc_id}')
+              OIDC=$(kubectl get configmap cluster-info -n crossplane-system -o jsonpath='{.data.oidc_provider}')
+              SUBNETS=$(kubectl get configmap cluster-info -n crossplane-system -o jsonpath='{.data.private_subnet_ids}')
+
+              # Parse subnet IDs (comma-separated)
+              IFS=',' read -ra SUBNET_ARRAY <<< "$SUBNETS"
+              SUBNET_A=${SUBNET_ARRAY[0]:-""}
+              SUBNET_B=${SUBNET_ARRAY[1]:-""}
+              SUBNET_C=${SUBNET_ARRAY[2]:-""}
+
+              echo "Syncing values to EnvironmentConfig..."
+              echo "  Account: $ACCOUNT_ID"
+              echo "  Region: $REGION"
+              echo "  VPC: $VPC_ID"
+              echo "  Subnets: $SUBNET_A, $SUBNET_B, $SUBNET_C"
+
+              # Update EnvironmentConfig
+              kubectl patch environmentconfig cluster-info --type=merge -p "{
+                \"spec\": {
+                  \"data\": {
+                    \"accountId\": \"$ACCOUNT_ID\",
+                    \"region\": \"$REGION\",
+                    \"vpcId\": \"$VPC_ID\",
+                    \"oidcProvider\": \"$OIDC\",
+                    \"privateSubnetA\": \"$SUBNET_A\",
+                    \"privateSubnetB\": \"$SUBNET_B\",
+                    \"privateSubnetC\": \"$SUBNET_C\"
+                  }
+                }
+              }"
+
+              echo "EnvironmentConfig updated"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: config-sync
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: config-sync
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get"]
+  - apiGroups: ["apiextensions.crossplane.io"]
+    resources: ["environmentconfigs"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: config-sync
+subjects:
+  - kind: ServiceAccount
+    name: config-sync
+    namespace: crossplane-system
+roleRef:
+  kind: ClusterRole
+  name: config-sync
+  apiGroup: rbac.authorization.k8s.io
